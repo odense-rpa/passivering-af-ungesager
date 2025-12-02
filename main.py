@@ -114,6 +114,7 @@ async def process_workqueue(workqueue: Workqueue):
                         group="Behandlet",
                         json={"Cpr": borger["patientIdentifier"]["identifier"]},
                     )
+                    tracker.track_task(process_name=proces_navn)
 
             except WorkItemError as e:
                 # A WorkItemError represents a soft error that indicates the item should be passed to manual processing or a business logic fault
