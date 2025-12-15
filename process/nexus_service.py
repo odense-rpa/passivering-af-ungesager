@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from httpx import HTTPStatusError
 from kmd_nexus_client import NexusClientManager
 from kmd_nexus_client.tree_helpers import (
     filter_by_path,
@@ -38,20 +39,23 @@ class NexusService:
             active_pathways_only=True,
         )
 
-        if len(medarbejder_reference) > 0:
-            medarbejder = self.nexus.hent_fra_reference(medarbejder_reference[0])
-            return medarbejder
-
-        else:
-            medarbejder_reference = filter_by_path(
-                referencer,
-                path_pattern="/Børn og Unge Grundforløb/professionalReference",
-                active_pathways_only=True,
-            )
-
+        try:
             if len(medarbejder_reference) > 0:
                 medarbejder = self.nexus.hent_fra_reference(medarbejder_reference[0])
                 return medarbejder
+
+            else:
+                medarbejder_reference = filter_by_path(
+                    referencer,
+                    path_pattern="/Børn og Unge Grundforløb/professionalReference",
+                    active_pathways_only=True,
+                )
+
+                if len(medarbejder_reference) > 0:
+                    medarbejder = self.nexus.hent_fra_reference(medarbejder_reference[0])
+                    return medarbejder
+        except Exception:
+            return None
 
         return None
 
@@ -118,6 +122,7 @@ class NexusService:
                 )
         return fejl_besked
 
+
     def passiver_socialsager(self, skema: dict, referencer, borger) -> str:
         fejl_besked = ""
 
@@ -152,7 +157,7 @@ class NexusService:
                     )
 
                 if medarbejder is None:
-                    fejl_besked = "Kunne ikke finde medarbejder på kompensationssag."
+                    fejl_besked = "Kunne ikke finde medarbejder på kompensationssag.\n\n"
                     return fejl_besked
 
                 self.nexus.opgaver.opret_opgave(
@@ -163,11 +168,12 @@ class NexusService:
                     ansvarlig_medarbejder=medarbejder,
                     start_dato=datetime.now().date(),
                     forfald_dato=datetime.now().date() + timedelta(days=7),
-                    beskrivelse=f"""Passivering af sag er ikke mulig, da en eller flere indsatser fortsat er aktive på sagen {forløbsreference["name"]}.\n\n                                        
-                                "Indsatser skal derfor afsluttes og efterfølgende skal denne opgave afsluttes."\n\n                                        
-                                "Tyra vil herefter lukke sagen.""",
+                    beskrivelse=f"""Passivering af sag er ikke mulig, da en eller flere indsatser fortsat er aktive på sagen {forløbsreference["name"]}.\n\n
+                                "Indsatser skal derfor afsluttes og efterfølgende skal denne opgave afsluttes."\n\n
+                                "Tyra vil herefter lukke sagen."""
                 )
-                fejl_besked += "Passivering ikke mulig pga. aktiv indsats."
+
+                fejl_besked += "Passivering ikke mulig pga. aktiv indsats.\n\n"
                 return fejl_besked
 
             if medarbejder is not None:
@@ -175,7 +181,16 @@ class NexusService:
                     medarbejder_reference=medarbejder
                 )
 
-            self.nexus.forløb.luk_forløb(forløb_reference=forløbsreference)
+            try:
+                self.nexus.forløb.luk_forløb(
+                    forløb_reference=forløbsreference
+                )
+            except HTTPStatusError as e:
+                if e.response.status_code == 404:
+                    continue                    
+                else:
+                    raise  # Any other HTTP error is real and should fail
+
             relationer = self.nexus.organisationer.hent_organisationer_for_borger(
                 borger=borger
             )
@@ -192,3 +207,4 @@ class NexusService:
                     )
 
         return fejl_besked
+

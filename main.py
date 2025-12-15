@@ -68,28 +68,33 @@ async def process_workqueue(workqueue: Workqueue):
                 borger = nexus.hent_fra_reference(data["patients"][0])
                 skema = nexus.hent_fra_reference(data["children"][0])
                 opgave = nexus.hent_fra_reference(data)
-                kompensationssag = (
-                    skema["pathwayAssociation"]["placement"]["name"]
-                    == "Sag: Støtte til børn og unge med funktionsnedsættelse"
-                )
-                pathway = nexus.borgere.hent_visning(borger=borger)
 
-                if pathway is None:
-                    raise ValueError(
-                        f"Kunne ikke finde -Alt for borger {borger['patientIdentifier']['identifier']}"
+                if skema["pathwayAssociation"]["placement"] is None:
+                    fejl_besked = "Skema er ikke tilknyttet et forløb."
+                
+                else:                    
+                    kompensationssag = (
+                        skema["pathwayAssociation"]["placement"]["name"]
+                        == "Sag: Støtte til børn og unge med funktionsnedsættelse"
                     )
+                    pathway = nexus.borgere.hent_visning(borger=borger)
 
-                referencer = nexus.borgere.hent_referencer(visning=pathway)
-                fejl_besked = ""
+                    if pathway is None:
+                        raise ValueError(
+                            f"Kunne ikke finde -Alt for borger {borger['patientIdentifier']['identifier']}"
+                        )
 
-                if kompensationssag:
-                    fejl_besked += nexus_service.passiver_kompensationssag(
-                        skema=skema, referencer=referencer, borger=borger
-                    )
-                else:
-                    fejl_besked += nexus_service.passiver_socialsager(
-                        skema=skema, referencer=referencer, borger=borger
-                    )
+                    referencer = nexus.borgere.hent_referencer(visning=pathway)
+                    fejl_besked = ""
+
+                    if kompensationssag:
+                        fejl_besked += nexus_service.passiver_kompensationssag(
+                            skema=skema, referencer=referencer, borger=borger
+                        )
+                    else:
+                        fejl_besked += nexus_service.passiver_socialsager(
+                            skema=skema, referencer=referencer, borger=borger
+                        )
 
                 if fejl_besked:
                     report(
