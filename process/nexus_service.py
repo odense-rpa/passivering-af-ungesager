@@ -197,10 +197,11 @@ class NexusService:
 
             for relation in relationer:
                 if relation["organization"]["name"] in [
-                    "Ungerådgivningen Social 1 - Rådgivere Børn",
-                    "Ungerådgivningen Social 2 - Rådgivere Børn",
-                    "Ungerådgivningen Special - Rådgivere Børn",
-                    "Ungerådgivningen Ungeindsats - Rådgivere Børn",
+                    "Ungerådgivningen 1",
+                    "Ungerådgivningen 2",
+                    "Ungerådgivningen 3",
+                    "Familierådgivningen",
+                    "Ungerådgivningen Social 1 - Vagt & Visitation"
                 ]:
                     self.nexus.organisationer.fjern_borger_fra_organisation(
                         organisations_relation=relation
