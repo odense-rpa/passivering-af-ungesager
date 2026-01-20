@@ -157,7 +157,7 @@ class NexusService:
                     )
 
                 if medarbejder is None:
-                    fejl_besked = "Kunne ikke finde medarbejder på kompensationssag.\n\n"
+                    fejl_besked = "Kunne ikke finde medarbejder på socialsag.\n\n"
                     return fejl_besked
 
                 self.nexus.opgaver.opret_opgave(
