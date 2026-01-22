@@ -71,8 +71,8 @@ async def process_workqueue(workqueue: Workqueue):
 
                 if skema["pathwayAssociation"]["placement"] is None:
                     fejl_besked = "Skema er ikke tilknyttet et forløb."
-                
-                else:                    
+
+                else:
                     kompensationssag = (
                         skema["pathwayAssociation"]["placement"]["name"]
                         == "Sag: Støtte til børn og unge med funktionsnedsættelse"

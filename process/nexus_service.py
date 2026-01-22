@@ -19,6 +19,19 @@ class NexusService:
         self.nexus_database = nexus_database_client
         self.tracker = tracker
 
+    def afgør_skema_ejerskab(self, skema: dict) -> dict | None:
+        skema = self.nexus.hent_fra_reference(skema)
+
+        historik = self.nexus.skemaer.hent_skema_historik(skema=skema)
+        leverandør_audit = sorted(
+            historik, key=lambda entry: entry["version"], reverse=True
+        )
+
+        if len(leverandør_audit) > 0:
+            return leverandør_audit[0]["professional"]
+
+        return None
+
     def aktive_indsatser_på_forløb(self, referencer, forløbsnavn: str) -> bool:
         filtrerede_indsats_referencer = filter_by_path(
             referencer,
@@ -52,14 +65,16 @@ class NexusService:
                 )
 
                 if len(medarbejder_reference) > 0:
-                    medarbejder = self.nexus.hent_fra_reference(medarbejder_reference[0])
+                    medarbejder = self.nexus.hent_fra_reference(
+                        medarbejder_reference[0]
+                    )
                     return medarbejder
         except Exception:
             return None
 
         return None
 
-    def passiver_kompensationssag(self, skema: dict, referencer, borger) -> str:
+    def passiver_kompensationssag(self, skema: dict, referencer, borger: dict) -> str:
         fejl_besked = ""
 
         forløbsreference = filter_by_path(
@@ -72,24 +87,13 @@ class NexusService:
             fejl_besked += "Kunne ikke finde aktivkompensationssag."
             return fejl_besked
 
-        medarbejder = self.hent_medarbejder(
-            referencer=referencer, forløbsnavn=forløbsreference[0]["name"]
-        )
-
         if self.aktive_indsatser_på_forløb(
             referencer=referencer, forløbsnavn=forløbsreference[0]["name"]
         ):
-            if medarbejder is not None:
-                medarbejder = self.nexus_database.hent_medarbejder_med_activity_id(
-                    medarbejder.get("activityIdentifier", {}).get("activityId", "")
-                )
-                medarbejder = self.nexus.organisationer.hent_medarbejder_ved_initialer(
-                    medarbejder[0].get("primary_identifier", "")
-                )
+            medarbejder = self.afgør_skema_ejerskab(skema=skema)
 
             if medarbejder is None:
-                fejl_besked = "Kunne ikke finde medarbejder på kompensationssag."
-                return fejl_besked
+                return "Kunne ikke afgøre medarbejder på kompensationssag.\n\n"
 
             self.nexus.opgaver.opret_opgave(
                 objekt=skema,
@@ -103,12 +107,26 @@ class NexusService:
                             "Indsatser skal derfor afsluttes og efterfølgende skal denne opgave afsluttes."\n\n                                        
                             "Tyra vil herefter lukke sagen.""",
             )
-            fejl_besked = "Passivering ikke mulig pga. aktiv indsats."
+            return "Passivering ikke mulig pga. aktiv indsats.\n\n"
+
+        medarbejder = self.hent_medarbejder(
+            referencer=referencer, forløbsnavn=forløbsreference[0]["name"]
+        )
 
         if medarbejder is not None:
-            self.nexus.organisationer.fjern_medarbejder_fra_forløb(
-                medarbejder_reference=medarbejder
+            medarbejder = self.nexus_database.hent_medarbejder_med_activity_id(
+                medarbejder.get("activityIdentifier", {}).get("activityId", "")
             )
+            medarbejder = self.nexus.organisationer.hent_medarbejder_ved_initialer(
+                medarbejder[0].get("primary_identifier", "")
+            )
+
+            if medarbejder is None:
+                fejl_besked += "Kunne ikke afgøre medarbejder på kompensationssag.\n\n"
+            else:
+                self.nexus.organisationer.fjern_medarbejder_fra_forløb(
+                    medarbejder_reference=medarbejder
+                )
 
         self.nexus.forløb.luk_forløb(forløb_reference=forløbsreference[0])
         relationer = self.nexus.organisationer.hent_organisationer_for_borger(
@@ -121,7 +139,6 @@ class NexusService:
                     organisations_relation=relation
                 )
         return fejl_besked
-
 
     def passiver_socialsager(self, skema: dict, referencer, borger) -> str:
         fejl_besked = ""
@@ -139,26 +156,14 @@ class NexusService:
             ):
                 continue
 
-            medarbejder = self.hent_medarbejder(
-                referencer=referencer, forløbsnavn=forløbsreference["name"]
-            )
-
             if self.aktive_indsatser_på_forløb(
                 referencer=referencer, forløbsnavn=forløbsreference["name"]
             ):
-                if medarbejder is not None:
-                    medarbejder = self.nexus_database.hent_medarbejder_med_activity_id(
-                        medarbejder.get("activityIdentifier", {}).get("activityId", "")
-                    )
-                    medarbejder = (
-                        self.nexus.organisationer.hent_medarbejder_ved_initialer(
-                            medarbejder[0].get("primary_identifier", "")
-                        )
-                    )
+                medarbejder = self.afgør_skema_ejerskab(skema=skema)
 
                 if medarbejder is None:
-                    fejl_besked = "Kunne ikke finde medarbejder på socialsag.\n\n"
-                    return fejl_besked
+                    fejl_besked += f"Kunne ikke afgøre medarbejder på socialsag: {forløbsreference['name']}.\n\n"
+                    continue
 
                 self.nexus.opgaver.opret_opgave(
                     objekt=skema,
@@ -170,24 +175,38 @@ class NexusService:
                     forfald_dato=datetime.now().date() + timedelta(days=7),
                     beskrivelse=f"""Passivering af sag er ikke mulig, da en eller flere indsatser fortsat er aktive på sagen {forløbsreference["name"]}.\n\n
                                 "Indsatser skal derfor afsluttes og efterfølgende skal denne opgave afsluttes."\n\n
-                                "Tyra vil herefter lukke sagen."""
+                                "Tyra vil herefter lukke sagen.""",
                 )
 
                 fejl_besked += "Passivering ikke mulig pga. aktiv indsats.\n\n"
-                return fejl_besked
+                continue
+
+            medarbejder = self.hent_medarbejder(
+                referencer=referencer, forløbsnavn=forløbsreference["name"]
+            )
 
             if medarbejder is not None:
-                self.nexus.organisationer.fjern_medarbejder_fra_forløb(
-                    medarbejder_reference=medarbejder
+                medarbejder = self.nexus_database.hent_medarbejder_med_activity_id(
+                    medarbejder.get("activityIdentifier", {}).get("activityId", "")
+                )
+                medarbejder = self.nexus.organisationer.hent_medarbejder_ved_initialer(
+                    medarbejder[0].get("primary_identifier", "")
                 )
 
+                if medarbejder is None:
+                    fejl_besked += (
+                        "Kunne ikke afgøre medarbejder på kompensationssag.\n\n"
+                    )
+                else:
+                    self.nexus.organisationer.fjern_medarbejder_fra_forløb(
+                        medarbejder_reference=medarbejder
+                    )
+
             try:
-                self.nexus.forløb.luk_forløb(
-                    forløb_reference=forløbsreference
-                )
+                self.nexus.forløb.luk_forløb(forløb_reference=forløbsreference)
             except HTTPStatusError as e:
                 if e.response.status_code == 404:
-                    continue                    
+                    continue
                 else:
                     raise  # Any other HTTP error is real and should fail
 
@@ -201,11 +220,10 @@ class NexusService:
                     "Ungerådgivningen 2",
                     "Ungerådgivningen 3",
                     "Familierådgivningen",
-                    "Ungerådgivningen Social 1 - Vagt & Visitation"
+                    "Ungerådgivningen Social 1 - Vagt & Visitation",
                 ]:
                     self.nexus.organisationer.fjern_borger_fra_organisation(
                         organisations_relation=relation
                     )
 
         return fejl_besked
-
