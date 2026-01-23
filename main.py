@@ -45,17 +45,7 @@ async def populate_queue(workqueue: Workqueue):
     ]
 
     for aktivitet in aktivitetsliste:
-        eksisterende_kødata = workqueue.get_item_by_reference(
-            str(aktivitet["id"]), status=WorkItemStatus.COMPLETED
-        )
-        eksisterende_kødata = [
-            item
-            for item in eksisterende_kødata
-            if item.updated_at > datetime.now() - timedelta(days=7)
-        ]
-
-        if len(eksisterende_kødata) == 0:
-            workqueue.add_item(aktivitet, reference=str(aktivitet["id"]))
+        workqueue.add_item(aktivitet, reference=str(aktivitet["id"]))
 
 
 async def process_workqueue(workqueue: Workqueue):
