@@ -45,7 +45,7 @@ class NexusService:
 
         return len(indsatser) > 0
 
-    def hent_medarbejder(self, referencer, forløbsnavn: str):
+    def hent_medarbejder(self, referencer, forløbsnavn: str, kompensationssag=False):        
         medarbejder_reference = filter_by_path(
             referencer,
             path_pattern=f"/Børn og Unge Grundforløb/{forløbsnavn}/professionalReference",
@@ -57,7 +57,7 @@ class NexusService:
                 medarbejder = self.nexus.hent_fra_reference(medarbejder_reference[0])
                 return medarbejder
 
-            else:
+            elif not kompensationssag:
                 medarbejder_reference = filter_by_path(
                     referencer,
                     path_pattern="/Børn og Unge Grundforløb/professionalReference",
@@ -84,8 +84,7 @@ class NexusService:
         )
 
         if len(forløbsreference) == 0:
-            fejl_besked += "Kunne ikke finde aktivkompensationssag."
-            return fejl_besked
+            return "Kunne ikke finde aktiv kompensationssag."            
 
         if self.aktive_indsatser_på_forløb(
             referencer=referencer, forløbsnavn=forløbsreference[0]["name"]
@@ -110,23 +109,13 @@ class NexusService:
             return "Passivering ikke mulig pga. aktiv indsats.\n\n"
 
         medarbejder = self.hent_medarbejder(
-            referencer=referencer, forløbsnavn=forløbsreference[0]["name"]
+            referencer=referencer, forløbsnavn=forløbsreference[0]["name"], kompensationssag=True
         )
 
         if medarbejder is not None:
-            medarbejder = self.nexus_database.hent_medarbejder_med_activity_id(
-                medarbejder.get("activityIdentifier", {}).get("activityId", "")
-            )
-            medarbejder = self.nexus.organisationer.hent_medarbejder_ved_initialer(
-                medarbejder[0].get("primary_identifier", "")
-            )
-
-            if medarbejder is None:
-                fejl_besked += "Kunne ikke afgøre medarbejder på kompensationssag.\n\n"
-            else:
-                self.nexus.organisationer.fjern_medarbejder_fra_forløb(
+            self.nexus.organisationer.fjern_medarbejder_fra_forløb(
                     medarbejder_reference=medarbejder
-                )
+                )                
 
         self.nexus.forløb.luk_forløb(forløb_reference=forløbsreference[0])
         relationer = self.nexus.organisationer.hent_organisationer_for_borger(
@@ -134,7 +123,7 @@ class NexusService:
         )
 
         for relation in relationer:
-            if relation["name"] == "Ungerådgivningen Special - Kompensation":
+            if relation["organization"]["name"] == "Ungerådgivningen Special - Kompensation" or relation["organization"]["name"] == "Ungerådgivningen 3":
                 self.nexus.organisationer.fjern_borger_fra_organisation(
                     organisations_relation=relation
                 )
@@ -186,21 +175,9 @@ class NexusService:
             )
 
             if medarbejder is not None:
-                medarbejder = self.nexus_database.hent_medarbejder_med_activity_id(
-                    medarbejder.get("activityIdentifier", {}).get("activityId", "")
-                )
-                medarbejder = self.nexus.organisationer.hent_medarbejder_ved_initialer(
-                    medarbejder[0].get("primary_identifier", "")
-                )
-
-                if medarbejder is None:
-                    fejl_besked += (
-                        "Kunne ikke afgøre medarbejder på kompensationssag.\n\n"
-                    )
-                else:
-                    self.nexus.organisationer.fjern_medarbejder_fra_forløb(
+                self.nexus.organisationer.fjern_medarbejder_fra_forløb(
                         medarbejder_reference=medarbejder
-                    )
+                    )                    
 
             try:
                 self.nexus.forløb.luk_forløb(forløb_reference=forløbsreference)
@@ -216,6 +193,10 @@ class NexusService:
 
             for relation in relationer:
                 if relation["organization"]["name"] in [
+                    "Ungerådgivningen Social 1 - Rådgivere Børn",
+                    "Ungerådgivningen Social 2 - Rådgivere Børn",
+                    "Ungerådgivningen Special - Rådgivere Børn",
+                    "Ungerådgivningen Ungeindsats - Rådgivere Børn",
                     "Ungerådgivningen 1",
                     "Ungerådgivningen 2",
                     "Ungerådgivningen 3",
