@@ -84,7 +84,8 @@ class NexusService:
         )
 
         if len(forløbsreference) == 0:
-            return "Kunne ikke finde aktiv kompensationssag."            
+            # Forløb er afsluttet, luk derfor opgave.
+            return ""
 
         if self.aktive_indsatser_på_forløb(
             referencer=referencer, forløbsnavn=forløbsreference[0]["name"]
