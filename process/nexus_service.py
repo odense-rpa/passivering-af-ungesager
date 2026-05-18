@@ -45,7 +45,7 @@ class NexusService:
 
         return len(indsatser) > 0
 
-    def hent_medarbejder(self, referencer, forløbsnavn: str, kompensationssag=False):        
+    def hent_medarbejder(self, referencer, forløbsnavn: str, kompensationssag=False):
         medarbejder_reference = filter_by_path(
             referencer,
             path_pattern=f"/Børn og Unge Grundforløb/{forløbsnavn}/professionalReference",
@@ -110,13 +110,15 @@ class NexusService:
             return "Passivering ikke mulig pga. aktiv indsats.\n\n"
 
         medarbejder = self.hent_medarbejder(
-            referencer=referencer, forløbsnavn=forløbsreference[0]["name"], kompensationssag=True
+            referencer=referencer,
+            forløbsnavn=forløbsreference[0]["name"],
+            kompensationssag=True,
         )
 
         if medarbejder is not None:
             self.nexus.organisationer.fjern_medarbejder_fra_forløb(
-                    medarbejder_reference=medarbejder
-                )                
+                medarbejder_reference=medarbejder
+            )
 
         self.nexus.forløb.luk_forløb(forløb_reference=forløbsreference[0])
         relationer = self.nexus.organisationer.hent_organisationer_for_borger(
@@ -124,7 +126,11 @@ class NexusService:
         )
 
         for relation in relationer:
-            if relation["organization"]["name"] == "Ungerådgivningen Special - Kompensation" or relation["organization"]["name"] == "Ungerådgivningen 3":
+            if (
+                relation["organization"]["name"]
+                == "Ungerådgivningen Special - Kompensation"
+                or relation["organization"]["name"] == "Ungerådgivningen 3"
+            ):
                 self.nexus.organisationer.fjern_borger_fra_organisation(
                     organisations_relation=relation
                 )
@@ -155,18 +161,23 @@ class NexusService:
                     fejl_besked += f"Kunne ikke afgøre medarbejder på socialsag: {forløbsreference['name']}.\n\n"
                     continue
 
-                self.nexus.opgaver.opret_opgave(
-                    objekt=skema,
-                    opgave_type="BL - Passivering ikke muligt pga. aktiv indsats",
-                    titel="Passivering ikke mulig - Aktiv indsats",
-                    ansvarlig_organisation=medarbejder["primaryOrganization"]["name"],
-                    ansvarlig_medarbejder=medarbejder,
-                    start_dato=datetime.now().date(),
-                    forfald_dato=datetime.now().date() + timedelta(days=7),
-                    beskrivelse=f"""Passivering af sag er ikke mulig, da en eller flere indsatser fortsat er aktive på sagen {forløbsreference["name"]}.\n\n
-                                "Indsatser skal derfor afsluttes og efterfølgende skal denne opgave afsluttes."\n\n
-                                "Tyra vil herefter lukke sagen.""",
-                )
+                try:
+                    self.nexus.opgaver.opret_opgave(
+                        objekt=skema,
+                        opgave_type="BL - Passivering ikke muligt pga. aktiv indsats",
+                        titel="Passivering ikke mulig - Aktiv indsats",
+                        ansvarlig_organisation=medarbejder["primaryOrganization"][
+                            "name"
+                        ],
+                        ansvarlig_medarbejder=medarbejder,
+                        start_dato=datetime.now().date(),
+                        forfald_dato=datetime.now().date() + timedelta(days=7),
+                        beskrivelse=f"""Passivering af sag er ikke mulig, da en eller flere indsatser fortsat er aktive på sagen {forløbsreference["name"]}.\n\n
+                                    "Indsatser skal derfor afsluttes og efterfølgende skal denne opgave afsluttes."\n\n
+                                    "Tyra vil herefter lukke sagen.""",
+                    )
+                except Exception:
+                    fejl_besked += "Medarbejder har ikke en ansvarlig organisation, og der kunne derfor ikke oprettes en opgave om aktiv indsats på sagen.\n\n"
 
                 fejl_besked += "Passivering ikke mulig pga. aktiv indsats.\n\n"
                 continue
@@ -177,8 +188,8 @@ class NexusService:
 
             if medarbejder is not None:
                 self.nexus.organisationer.fjern_medarbejder_fra_forløb(
-                        medarbejder_reference=medarbejder
-                    )                    
+                    medarbejder_reference=medarbejder
+                )
 
             try:
                 self.nexus.forløb.luk_forløb(forløb_reference=forløbsreference)

@@ -41,7 +41,8 @@ async def populate_queue(workqueue: Workqueue):
         and aktivitet["name"] == "Luk sag - Tyra"
         and datetime.strptime(aktivitet["date"], "%Y-%m-%dT%H:%M:%S.%f%z")
         > datetime.now(timezone.utc) - timedelta(days=7)
-        and datetime.now(timezone.utc) > datetime.strptime(aktivitet["date"], "%Y-%m-%dT%H:%M:%S.%f%z")
+        and datetime.now(timezone.utc)
+        > datetime.strptime(aktivitet["date"], "%Y-%m-%dT%H:%M:%S.%f%z")
     ]
 
     for aktivitet in aktivitetsliste:
