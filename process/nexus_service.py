@@ -45,6 +45,22 @@ class NexusService:
 
         return len(indsatser) > 0
 
+    def underretning_skema_i_kladde_på_forløb(self, referencer, forløbsnavn: str) -> bool:
+        filtrerede_skema_referencer = filter_by_path(
+            referencer,
+            path_pattern=f"/*/{forløbsnavn}/formDataV2Reference",
+            active_pathways_only=True,
+        )
+
+        skemaer = [
+            skema
+            for skema in filtrerede_skema_referencer
+            if skema.get("formDataStatus") == "Kladde"
+            and skema.get("name") == "Underretning og screening"
+        ]
+
+        return len(skemaer) > 0
+
     def hent_medarbejder(self, referencer, forløbsnavn: str, kompensationssag=False):
         medarbejder_reference = filter_by_path(
             referencer,
@@ -108,6 +124,28 @@ class NexusService:
                             "Tyra vil herefter lukke sagen.""",
             )
             return "Passivering ikke mulig pga. aktiv indsats.\n\n"
+
+        if self.underretning_skema_i_kladde_på_forløb(
+            referencer=referencer, forløbsnavn=forløbsreference[0]["name"]
+        ):
+            medarbejder = self.afgør_skema_ejerskab(skema=skema)
+
+            if medarbejder is None:
+                return "Kunne ikke afgøre medarbejder på kompensationssag.\n\n"
+
+            self.nexus.opgaver.opret_opgave(
+                objekt=skema,
+                opgave_type="BL - Passivering ikke muligt pga. aktiv indsats",
+                titel="Passivering ikke mulig - Underretning i kladde",
+                ansvarlig_organisation=medarbejder["primaryOrganization"]["name"],
+                ansvarlig_medarbejder=medarbejder,
+                start_dato=datetime.now().date(),
+                forfald_dato=datetime.now().date() + timedelta(days=7),
+                beskrivelse="""Passivering af sag er ikke mulig, da der fortsat findes en underretning og screening i kladde på sagen.\n\n
+                            "Skemaet skal derfor færdiggøres eller slettes, og efterfølgende skal denne opgave afsluttes."\n\n
+                            "Tyra vil herefter lukke sagen.""",
+            )
+            return "Passivering ikke mulig pga. underretning i kladde.\n\n"
 
         medarbejder = self.hent_medarbejder(
             referencer=referencer,
@@ -180,6 +218,36 @@ class NexusService:
                     fejl_besked += "Medarbejder har ikke en ansvarlig organisation, og der kunne derfor ikke oprettes en opgave om aktiv indsats på sagen.\n\n"
 
                 fejl_besked += "Passivering ikke mulig pga. aktiv indsats.\n\n"
+                continue
+
+            if self.underretning_skema_i_kladde_på_forløb(
+                referencer=referencer, forløbsnavn=forløbsreference["name"]
+            ):
+                medarbejder = self.afgør_skema_ejerskab(skema=skema)
+
+                if medarbejder is None:
+                    fejl_besked += f"Kunne ikke afgøre medarbejder på socialsag: {forløbsreference['name']}.\n\n"
+                    continue
+
+                try:
+                    self.nexus.opgaver.opret_opgave(
+                        objekt=skema,
+                        opgave_type="BL - Passivering ikke muligt pga. aktiv indsats",
+                        titel="Passivering ikke mulig - Underretning i kladde",
+                        ansvarlig_organisation=medarbejder["primaryOrganization"][
+                            "name"
+                        ],
+                        ansvarlig_medarbejder=medarbejder,
+                        start_dato=datetime.now().date(),
+                        forfald_dato=datetime.now().date() + timedelta(days=7),
+                        beskrivelse=f"""Passivering af sag er ikke mulig, da der fortsat findes en underretning og screening i kladde på sagen {forløbsreference["name"]}.\n\n
+                                    "Skemaet skal derfor færdiggøres eller slettes, og efterfølgende skal denne opgave afsluttes."\n\n
+                                    "Tyra vil herefter lukke sagen.""",
+                    )
+                except Exception:
+                    fejl_besked += "Medarbejder har ikke en ansvarlig organisation, og der kunne derfor ikke oprettes en opgave om underretning i kladde på sagen.\n\n"
+
+                fejl_besked += "Passivering ikke mulig pga. underretning i kladde.\n\n"
                 continue
 
             medarbejder = self.hent_medarbejder(
