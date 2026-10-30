@@ -169,8 +169,10 @@ class NexusService:
                 == "Ungerådgivningen Special - Kompensation"
                 or relation["organization"]["name"] == "Ungerådgivningen 3"
             ):
-                self.nexus.organisationer.fjern_borger_fra_organisation(
-                    organisations_relation=relation
+                self.nexus.organisationer.opdater_borger_organisations_relation(
+                    relation=relation,
+                    slut_dato=datetime.now().date(),
+                    primær_organisation=False,
                 )
         return fejl_besked
 
@@ -283,8 +285,10 @@ class NexusService:
                     "Familierådgivningen",
                     "Ungerådgivningen Social 1 - Vagt & Visitation",
                 ]:
-                    self.nexus.organisationer.fjern_borger_fra_organisation(
-                        organisations_relation=relation
+                    self.nexus.organisationer.opdater_borger_organisations_relation(
+                        relation=relation,
+                        slut_dato=datetime.now().date(),
+                        primær_organisation=False,
                     )
 
         return fejl_besked
